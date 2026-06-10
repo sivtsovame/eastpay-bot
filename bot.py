@@ -29,6 +29,7 @@ async def set_commands(bot: Bot):
         BotCommand(command="rates",    description="Текущие курсы валют"),
         BotCommand(command="setrate",  description="(Админ) Задать курс: /setrate JPY transfer 155.21"),
         BotCommand(command="formula",  description="Личные формулы для инлайн-калькулятора"),
+        BotCommand(command="wallet",   description="Кошельки: /wallet add АДРЕС ИМЯ"),
         BotCommand(command="track",    description="Отслеживать BTC-адрес"),
         BotCommand(command="untrack",  description="Удалить адрес из мониторинга"),
         BotCommand(command="address",  description="Список отслеживаемых адресов"),

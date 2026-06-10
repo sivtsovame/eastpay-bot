@@ -9,13 +9,19 @@ async def init_db():
     async with aiosqlite.connect(DB_PATH) as db:
         # ── Балансы (/b команды) ──────────────────────────────────────────────
         await db.execute("""
-            CREATE TABLE IF NOT EXISTS balances (
-                chat_id   INTEGER NOT NULL,
-                currency  TEXT    NOT NULL COLLATE NOCASE,
-                amount    REAL    NOT NULL DEFAULT 0,
-                PRIMARY KEY (chat_id, currency)
-            )
-        """)
+                    CREATE TABLE IF NOT EXISTS tracked_addresses (
+                        chat_id INTEGER NOT NULL,
+                        address TEXT    NOT NULL,
+                        name    TEXT    DEFAULT '',
+                        PRIMARY KEY (chat_id, address)
+                    )
+                """)
+                # Добавляем колонку name если её нет (для существующих БД)
+        try:
+            await db.execute("ALTER TABLE tracked_addresses ADD COLUMN name TEXT DEFAULT ''")
+            await db.commit()
+        except Exception:
+            pass
         # ── История операций по балансам ──────────────────────────────────────
         await db.execute("""
             CREATE TABLE IF NOT EXISTS balance_history (
@@ -166,13 +172,22 @@ async def get_total_turnover(chat_id: int, currency: str) -> float:
 #  BTC АДРЕСА
 # ════════════════════════════════════════════════════════════════════════════
 
-async def add_tracked_address(chat_id: int, address: str):
+async def add_tracked_address(chat_id: int, address: str, name: str = ""):
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute(
-            "INSERT OR IGNORE INTO tracked_addresses (chat_id, address) VALUES (?, ?)",
-            (chat_id, address)
+            "INSERT OR REPLACE INTO tracked_addresses (chat_id, address, name) VALUES (?, ?, ?)",
+            (chat_id, address, name)
         )
         await db.commit()
+
+
+async def get_tracked_wallets(chat_id: int) -> list[dict]:
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute(
+            "SELECT address, name FROM tracked_addresses WHERE chat_id=?", (chat_id,)
+        ) as cur:
+            return [dict(r) for r in await cur.fetchall()]
 
 
 async def remove_tracked_address(chat_id: int, address: str):
@@ -191,11 +206,10 @@ async def get_tracked_addresses(chat_id: int) -> list[str]:
         ) as cur:
             return [r[0] for r in await cur.fetchall()]
 
-
-async def get_all_tracked() -> list[tuple[int, str]]:
-    """Все (chat_id, address) для фонового мониторинга."""
+async def get_all_tracked() -> list[tuple[int, str, str]]:
+    """Все (chat_id, address, name) для фонового мониторинга."""
     async with aiosqlite.connect(DB_PATH) as db:
-        async with db.execute("SELECT chat_id, address FROM tracked_addresses") as cur:
+        async with db.execute("SELECT chat_id, address, COALESCE(name, '') FROM tracked_addresses") as cur:
             return await cur.fetchall()
 
 
