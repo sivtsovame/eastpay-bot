@@ -37,9 +37,9 @@ async def evaluate_expression(expr: str, user_id: int) -> float:
     for f in formulas:
         raw = re.sub(re.escape(f["shortcut"]), f"({f['formula']})", raw, flags=re.IGNORECASE)
 
-    if re.search(r'\bex\b', raw, re.IGNORECASE):
+    if re.search(r'\b(ex|usd)\b', raw, re.IGNORECASE):
         garus = await fetch_garus()
-        raw = re.sub(r'\bex\b', str(garus), raw, flags=re.IGNORECASE)
+        raw = re.sub(r'\b(ex|usd)\b', str(garus), raw, flags=re.IGNORECASE)
 
     raw = _preprocess_percents(raw)
 
@@ -62,10 +62,10 @@ def _preprocess_percents(expr: str) -> str:
 
 def _format_number(n: float) -> str:
     if n == int(n) and abs(n) < 1e15:
-        return f"{int(n):,}".replace(",", " ")
+        return f"{int(n):,}".replace(",", "'")
     formatted = f"{n:.8f}".rstrip("0").rstrip(".")
     parts = formatted.split(".")
-    parts[0] = f"{int(parts[0]):,}".replace(",", " ")
+    parts[0] = f"{int(parts[0]):,}".replace(",", "'")
     return ".".join(parts)
 
 

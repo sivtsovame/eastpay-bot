@@ -12,6 +12,8 @@ router = Router()
 CURRENCY_SYMBOLS = {
     "USD": "$", "RUB": "₽", "USDT": "usdt",
     "BTC": "฿", "EUR": "€", "CNY": "¥",
+    "USDTKHV": "usdt", "USDTVL": "usdt", "USDTSKH": "usdt",
+    "USDTMSK": "usdt", "KHV": "₽", "VL": "₽", "MSK": "₽",
 }
 
 
@@ -36,10 +38,9 @@ async def balance_command(message: Message):
         if not balances:
             await message.reply("📭 Балансов нет. Создайте: <code>/b usd 100</code>", parse_mode="HTML")
             return
-        lines = ["<b>Баланс:</b>\n"]
+        lines = []
         for b in balances:
-            sym = _sym(b["currency"])
-            lines.append(f"{b['currency']}: {_fmt(b['amount'])} {sym}")
+            lines.append(f"{b['currency']}: {_fmt(b['amount'])}")
         await message.reply("\n".join(lines), parse_mode="HTML")
         return
 
@@ -163,5 +164,5 @@ def _fmt(n: float | None) -> str:
     if n is None:
         return "0.00"
     if n == int(n):
-        return f"{int(n):,}".replace(",", " ")
-    return f"{n:,.8f}".rstrip("0").rstrip(".").replace(",", " ")
+        return f"{int(n):,}".replace(",", "'")
+    return f"{n:,.8f}".rstrip("0").rstrip(".").replace(",", "'")

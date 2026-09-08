@@ -9,7 +9,7 @@ from aiogram.types import Message, BotCommand
 
 from config import BOT_TOKEN
 from database.db import init_db
-from handlers import calculator, balance, tracking, deals, formulas
+from handlers import calculator, balance, tracking, deals, formulas, tickets
 
 logging.basicConfig(
     level=logging.INFO,
@@ -59,6 +59,7 @@ async def main():
     dp.include_router(tracking.router)
     dp.include_router(deals.router)
     dp.include_router(formulas.router)
+    dp.include_router(tickets.router)
 
     # /start
     @dp.message(CommandStart())
