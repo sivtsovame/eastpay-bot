@@ -75,6 +75,7 @@ secret_key.txt
 
 # Database files
 *.sqlite3
+*.db
 
 # Coverage and reports
 .reportlab_cache

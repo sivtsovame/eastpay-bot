@@ -64,11 +64,12 @@ async def main():
     @dp.message(CommandStart())
     async def cmd_start(message: Message):
         await message.reply(
-            "<b>👋 Привет! Я EAST PAY бот.</b>\n\n"
+            "<b>Что умеет этот бот?</b>\n\n"
+            "<b>👋 Привет! Я FINCORE бот.</b>\n\n"
             "<b>Инлайн-калькулятор:</b>\n"
-            "В любом чате: <code>@botname (3511*95)+55</code>\n"
-            "Курс Garantex: <code>@botname garus</code>\n"
-            "С процентами: <code>@botname garus+1%+0.5%</code>\n\n"
+            "В любом чате: <code>@fincore_acc_bot (3511*95)+55</code>\n"
+            "Курс Garantex: <code>@fincore_acc_bot garus</code>\n"
+            "С процентами: <code>@fincore_acc_bot garus+1%+0.5%</code>\n\n"
             "<b>Основные команды:</b>\n"
             "/b — балансы\n"
             "/deal — создать сделку\n"
