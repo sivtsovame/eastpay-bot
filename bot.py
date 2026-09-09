@@ -9,7 +9,7 @@ from aiogram.types import Message, BotCommand
 
 from config import BOT_TOKEN
 from database.db import init_db
-from handlers import calculator, balance, tracking, deals, formulas, tickets
+from handlers import calculator, balance, tracking, deals, formulas, tickets, transactions
 
 logging.basicConfig(
     level=logging.INFO,
@@ -34,6 +34,8 @@ async def set_commands(bot: Bot):
         BotCommand(command="untrack",  description="Удалить адрес из мониторинга"),
         BotCommand(command="address",  description="Список отслеживаемых адресов"),
         BotCommand(command="roll", description="Случайное число: /roll 100"),
+        BotCommand(command="ticket", description="Создать заявку: /ticket @от @кому 1000 RUB"),
+        BotCommand(command="ticketlist", description="Список открытых заявок"),
     ]
     await bot.set_my_commands(commands)
 
@@ -60,6 +62,7 @@ async def main():
     dp.include_router(deals.router)
     dp.include_router(formulas.router)
     dp.include_router(tickets.router)
+    dp.include_router(transactions.router)
 
     # /start
     @dp.message(CommandStart())

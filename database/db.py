@@ -85,6 +85,31 @@ async def init_db():
             )
         """)
         await db.commit()
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS tickets (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                chat_id     INTEGER NOT NULL,
+                ticket_num  INTEGER NOT NULL,
+                ticket_label TEXT   NOT NULL,
+                sender      TEXT,
+                receiver    TEXT,
+                amount      TEXT,
+                currency    TEXT,
+                code        TEXT,
+                creator_id  INTEGER,
+                message_id  INTEGER,
+                status      TEXT DEFAULT 'open',
+                created_at  DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS transactions (
+                id         INTEGER PRIMARY KEY AUTOINCREMENT,
+                chat_id    INTEGER NOT NULL,
+                tx_num     INTEGER NOT NULL,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -342,3 +367,58 @@ async def delete_formula(user_id: int, shortcut: str):
             (user_id, shortcut.lower())
         )
         await db.commit()
+# ════════════════════════════════════════════════════════════════════════════
+#  ЗАЯВКИ (TICKETS)
+# ════════════════════════════════════════════════════════════════════════════
+
+async def get_next_ticket_number(chat_id: int) -> int:
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            "SELECT COALESCE(MAX(ticket_num), 0) + 1 FROM tickets WHERE chat_id=?",
+            (chat_id,)
+        ) as cur:
+            row = await cur.fetchone()
+            return row[0] if row else 1
+
+
+async def create_ticket(chat_id: int, ticket_num: int, ticket_label: str,
+                        sender: str, receiver: str, amount: str, currency: str,
+                        code: str, creator_id: int, message_id: int):
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("""
+            INSERT INTO tickets
+              (chat_id, ticket_num, ticket_label, sender, receiver,
+               amount, currency, code, creator_id, message_id, status)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'open')
+        """, (chat_id, ticket_num, ticket_label, sender, receiver,
+              amount, currency, code, creator_id, message_id))
+        await db.commit()
+
+
+async def update_ticket_status(chat_id: int, ticket_num: int, status: str):
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            "UPDATE tickets SET status=? WHERE chat_id=? AND ticket_num=?",
+            (status, chat_id, ticket_num)
+        )
+        await db.commit()
+
+
+async def get_open_tickets(chat_id: int) -> list[dict]:
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute("""
+            SELECT ticket_num, ticket_label, sender, receiver, amount, currency
+            FROM tickets WHERE chat_id=? AND status='open'
+            ORDER BY ticket_num
+        """, (chat_id,)) as cur:
+            return [dict(r) for r in await cur.fetchall()]
+
+async def get_next_tx_number(chat_id: int) -> int:
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            "SELECT COALESCE(MAX(tx_num), 0) + 1 FROM transactions WHERE chat_id=?",
+            (chat_id,)
+        ) as cur:
+            row = await cur.fetchone()
+            return row[0] if row else 1
