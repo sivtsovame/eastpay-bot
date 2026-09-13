@@ -239,19 +239,17 @@ async def _check_trc20(bot: Bot, chat_id: int, address: str, name: str):
     short_from = from_addr[:5] + "..." + from_addr[-5:] if len(from_addr) > 10 else from_addr
     short_to = address[:5] + "..." + address[-5:] if len(address) > 10 else address
 
+    short_tx_url = f"https://tronscan.org/#/transaction/{tx_id}"
+
     await bot.send_message(
         chat_id,
-        f"🚀💸 <b>Account: {name}</b> 💸🚀\n"
-        f"Income: {amount:,.2f}\n"
-        f"/b usdt {amount:.2f}\n"
-        f"/b usdt -{amount:.2f}\n"
-        f"<b>#{name}</b>\n"
-        f"⎯⎯⎯⎯⎯⎯ Transactions ⎯⎯⎯⎯⎯⎯\n"
-        f"{short_tx} +{amount:,.2f} {date_str}\n"
-        f"From: {short_from}\n"
-        f"To: {short_to}\n"
-        f"{amount:,.2f} USDT\n\n"
-        f"Баланс: {new_balance:,.2f} USDT",
+        f"✅ <b>Новое поступление USDT</b>\n"
+        f"💰 Сумма: {_fmt(amount)} USDT\n"
+        f"⏰ Время (МСК): {datetime.now().strftime('%d.%m.%Y %H:%M:%S')}\n"
+        f"📤 От: {from_addr}\n"
+        f"📥 Кому: {address}\n"
+        f"#️⃣ Hash: {tx_id}\n"
+        f"🔗 <a href='{short_tx_url}'>Посмотреть транзакцию</a>",
         parse_mode="HTML"
     )
 
