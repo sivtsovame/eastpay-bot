@@ -65,8 +65,7 @@ async def cmd_ticket(message: Message):
         f"Отдает: {sender}\n"
         f"Принимает: {receiver}\n"
         f"Сумма: {amount_fmt} {sym}\n"
-        f"Код: {code}\n"
-        f"Дедлайн: Отсутствует",
+        f"Код: {code}\n",
         reply_markup=builder.as_markup(),
         parse_mode="HTML"
     )
@@ -140,16 +139,47 @@ async def ticket_cancel(cb: CallbackQuery):
 
 @router.message(Command("ticketlist"))
 async def cmd_ticketlist(message: Message):
-    """Список неисполненных заявок."""
-    tickets = await db.get_open_tickets(message.chat.id)
-    if not tickets:
-        await message.reply("✅ Нет открытых заявок.")
-        return
+    """Список заявок с пагинацией."""
+    await _show_ticketlist(message, chat_id=message.chat.id, page=0, status="open")
 
-    lines = ["<b>📋 Открытые заявки:</b>\n"]
-    for t in tickets:
-        lines.append(
-            f"🔴 <b>Заявка {t['ticket_label']}</b>\n"
-            f"Сумма: {t['amount']} {t['currency']}\n"
-        )
-    await message.reply("\n".join(lines), parse_mode="HTML")
+
+async def _show_ticketlist(message_or_cb, chat_id: int, page: int, status: str):
+    PAGE_SIZE = 5
+    tickets = await db.get_tickets_by_status(chat_id, status)
+    total = len(tickets)
+    pages = max(1, (total + PAGE_SIZE - 1) // PAGE_SIZE)
+    page = max(0, min(page, pages - 1))
+    chunk = tickets[page * PAGE_SIZE:(page + 1) * PAGE_SIZE]
+
+    emoji = "🔴" if status == "open" else "⚫️"
+    title = "Открытые" if status == "open" else "Закрытые"
+    other_status = "closed" if status == "open" else "open"
+    other_title = "Закрытые" if status == "open" else "Открытые"
+
+    if not tickets:
+        lines = [f"<b>📋 {title} заявки:</b>\n\nНет заявок."]
+    else:
+        lines = [f"<b>📋 {title} заявки:</b>\n"]
+        for t in chunk:
+            lines.append(f"{emoji} <b>Заявка {t['ticket_label']}</b>\nСумма: {t['amount']} {t['currency']}\n")
+
+    builder = InlineKeyboardBuilder()
+    if page > 0:
+        builder.button(text="◀️", callback_data=f"tlist:{status}:{page-1}")
+    if page < pages - 1:
+        builder.button(text="▶️", callback_data=f"tlist:{status}:{page+1}")
+    builder.button(text=f"📋 {other_title}", callback_data=f"tlist:{other_status}:0")
+    builder.adjust(3)
+
+    text = "\n".join(lines)
+    if hasattr(message_or_cb, 'message'):
+        await message_or_cb.message.edit_text(text, reply_markup=builder.as_markup(), parse_mode="HTML")
+        await message_or_cb.answer()
+    else:
+        await message_or_cb.reply(text, reply_markup=builder.as_markup(), parse_mode="HTML")
+
+
+@router.callback_query(F.data.startswith("tlist:"))
+async def ticketlist_page(cb: CallbackQuery):
+    _, status, page_str = cb.data.split(":")
+    await _show_ticketlist(cb, chat_id=cb.message.chat.id, page=int(page_str), status=status)

@@ -422,3 +422,17 @@ async def get_next_tx_number(chat_id: int) -> int:
         ) as cur:
             row = await cur.fetchone()
             return row[0] if row else 1
+
+async def get_tickets_by_status(chat_id: int, status: str) -> list[dict]:
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        if status == "open":
+            where = "status='open'"
+        else:
+            where = "status IN ('done', 'cancelled')"
+        async with db.execute(f"""
+            SELECT ticket_num, ticket_label, sender, receiver, amount, currency, status
+            FROM tickets WHERE chat_id=? AND {where}
+            ORDER BY ticket_num DESC
+        """, (chat_id,)) as cur:
+            return [dict(r) for r in await cur.fetchall()]
