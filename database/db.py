@@ -436,3 +436,14 @@ async def get_tickets_by_status(chat_id: int, status: str) -> list[dict]:
             ORDER BY ticket_num DESC
         """, (chat_id,)) as cur:
             return [dict(r) for r in await cur.fetchall()]
+
+async def get_ticket_by_num(chat_id: int, ticket_num: int) -> dict | None:
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute("""
+            SELECT ticket_num, ticket_label, sender, receiver,
+                   amount, currency, code, status
+            FROM tickets WHERE chat_id=? AND ticket_num=?
+        """, (chat_id, ticket_num)) as cur:
+            row = await cur.fetchone()
+            return dict(row) if row else None

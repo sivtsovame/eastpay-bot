@@ -156,20 +156,30 @@ async def _show_ticketlist(message_or_cb, chat_id: int, page: int, status: str):
     other_status = "closed" if status == "open" else "open"
     other_title = "Закрытые" if status == "open" else "Открытые"
 
+    builder = InlineKeyboardBuilder()
+
     if not tickets:
         lines = [f"<b>📋 {title} заявки:</b>\n\nНет заявок."]
     else:
         lines = [f"<b>📋 {title} заявки:</b>\n"]
         for t in chunk:
-            lines.append(f"{emoji} <b>Заявка {t['ticket_label']}</b>\nСумма: {t['amount']} {t['currency']}\n")
+            lines.append(f"{emoji} <b>Заявка {t['ticket_label']}</b> — {t['amount']} {t['currency']}")
+        # Компактные кнопки — по 3 в ряд
+        for t in chunk:
+            builder.button(
+                text=f"{emoji} №{t['ticket_num']}",
+                callback_data=f"tview:{t['ticket_num']}"
+            )
+        builder.adjust(3)
 
-    builder = InlineKeyboardBuilder()
+    # Навигация
+    nav_buttons = []
     if page > 0:
         builder.button(text="◀️", callback_data=f"tlist:{status}:{page-1}")
+    builder.button(text=f"📋 {other_title}", callback_data=f"tlist:{other_status}:0")
     if page < pages - 1:
         builder.button(text="▶️", callback_data=f"tlist:{status}:{page+1}")
-    builder.button(text=f"📋 {other_title}", callback_data=f"tlist:{other_status}:0")
-    builder.adjust(3)
+    builder.adjust(3, 3)
 
     text = "\n".join(lines)
     if hasattr(message_or_cb, 'message'):
@@ -178,8 +188,32 @@ async def _show_ticketlist(message_or_cb, chat_id: int, page: int, status: str):
     else:
         await message_or_cb.reply(text, reply_markup=builder.as_markup(), parse_mode="HTML")
 
-
 @router.callback_query(F.data.startswith("tlist:"))
 async def ticketlist_page(cb: CallbackQuery):
     _, status, page_str = cb.data.split(":")
     await _show_ticketlist(cb, chat_id=cb.message.chat.id, page=int(page_str), status=status)
+
+@router.callback_query(F.data.startswith("tview:"))
+async def ticket_view(cb: CallbackQuery):
+    ticket_num = int(cb.data.split(":")[1])
+    ticket = await db.get_ticket_by_num(cb.message.chat.id, ticket_num)
+    if not ticket:
+        await cb.answer("Заявка не найдена.", show_alert=True)
+        return
+
+    status_emoji = {"open": "🔴", "done": "🟢", "cancelled": "⚫️"}.get(ticket["status"], "🔴")
+
+    builder = InlineKeyboardBuilder()
+    builder.button(text="◀️ Назад к списку", callback_data="tlist:open:0")
+    builder.adjust(1)
+
+    await cb.message.answer(
+        f"{status_emoji} <b>Заявка {ticket['ticket_label']}</b>\n"
+        f"Отдает: {ticket['sender']}\n"
+        f"Принимает: {ticket['receiver']}\n"
+        f"Сумма: {ticket['amount']} {ticket['currency']}\n"
+        f"Код: {ticket['code']}",
+        reply_markup=builder.as_markup(),
+        parse_mode="HTML"
+    )
+    await cb.answer()
