@@ -22,9 +22,20 @@ def _sym(currency: str) -> str:
 
 
 def _eval_amount(expr: str) -> float:
-    """Безопасно вычисляет числовое выражение, например -100*7."""
+    """Безопасно вычисляет числовое выражение, например -100*7 или 1000+1.4%"""
+    import re
+    expr = expr.replace(",", ".").replace("'", "")
+    # Обрабатываем проценты: +1.4% → *(1+1.4/100)
+    def replace_percent(m):
+        sign = m.group(1)
+        num = m.group(2)
+        if sign == '+':
+            return f'*(1+{num}/100)'
+        else:
+            return f'*(1-{num}/100)'
+    expr = re.sub(r'([+-])(\d+(?:\.\d+)?)%', replace_percent, expr)
     ev = SimpleEval()
-    return float(ev.eval(expr.replace(",", ".")))
+    return float(ev.eval(expr))
 
 
 @router.message(Command("b"))

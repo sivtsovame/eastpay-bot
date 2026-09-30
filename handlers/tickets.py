@@ -14,14 +14,15 @@ router = Router()
 def _generate_code() -> str:
     return f"{random.randint(100, 999)}-{random.randint(100, 999)}"
 
-
 def _fmt_amount(amount_str: str) -> str:
     try:
-        amount = float(amount_str.replace(",", ".").replace("'", "").replace(" ", ""))
+        clean = amount_str.replace(",", ".").replace("'", "").replace(" ", "")
+        amount = float(clean)
         if amount == int(amount):
             return f"{int(amount):,}".replace(",", "'")
         return f"{amount:,.2f}".replace(",", "'")
     except Exception:
+        # Если не число (например текст) — возвращаем как есть
         return amount_str
 
 
@@ -40,8 +41,16 @@ async def cmd_ticket(message: Message):
 
     sender   = parts[1]
     receiver = parts[2]
-    amount   = parts[3]
+    raw_amount = parts[3]
     currency = parts[4].upper() if len(parts) > 4 else "RUB"
+
+    # Вычисляем сумму как выражение
+    from handlers.calculator import evaluate_expression
+    try:
+        amount_val = await evaluate_expression(raw_amount, message.from_user.id)
+        amount = str(round(amount_val, 2))
+    except Exception:
+        amount = raw_amount
 
     code = _generate_code()
     now  = datetime.now()
