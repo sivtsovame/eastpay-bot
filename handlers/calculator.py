@@ -41,6 +41,23 @@ async def evaluate_expression(expr: str, user_id: int) -> float:
         garus = await fetch_garus()
         raw = re.sub(r'\b(ex|usd)\b', str(garus), raw, flags=re.IGNORECASE)
 
+    # Курсы с ЦБ РФ с поправками
+    from services.garantex import fetch_cbr_rate
+    cbr_pairs = {
+        'jpy': ('JPY', -0.6),   # BOC -0.6%
+        'eur': ('EUR', -1.0),   # XE -1%
+        'krw': ('KRW', -15),    # Bithumb -15 (абсолютное значение)
+        'cny': ('CNY', -0.6),   # BOC -0.6%
+    }
+    for keyword, (cbr_code, adjustment) in cbr_pairs.items():
+        if re.search(rf'\b{keyword}\b', raw, re.IGNORECASE):
+            base_rate = await fetch_cbr_rate(cbr_code)
+            if keyword == 'krw':
+                adjusted = base_rate - adjustment  # -15 абсолютное
+            else:
+                adjusted = base_rate * (1 + adjustment / 100)
+            raw = re.sub(rf'\b{keyword}\b', str(adjusted), raw, flags=re.IGNORECASE)
+
     raw = _preprocess_percents(raw)
 
     evaluator = SimpleEval()

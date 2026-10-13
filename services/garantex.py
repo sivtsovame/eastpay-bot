@@ -115,3 +115,29 @@ async def fetch_garus() -> float:
         if _cached_rate is not None:
             return _cached_rate
         raise RuntimeError(f"Не удалось получить курс EX: {e}")
+
+_cbr_cache: dict = {}
+_cbr_cache_ts: float = 0
+CBR_TTL = 3600  # 1 час
+
+async def fetch_cbr_rate(currency: str) -> float:
+    """Получает курс валюты к RUB с ЦБ РФ."""
+    global _cbr_cache, _cbr_cache_ts
+
+    now = asyncio.get_event_loop().time()
+    if _cbr_cache and (now - _cbr_cache_ts) < CBR_TTL:
+        data = _cbr_cache
+    else:
+        async with aiohttp.ClientSession(
+            timeout=aiohttp.ClientTimeout(total=10)
+        ) as session:
+            async with session.get("https://www.cbr-xml-daily.ru/daily_json.js") as resp:
+                data = await resp.json(content_type=None)
+                _cbr_cache = data
+                _cbr_cache_ts = now
+
+    valutes = data.get("Valute", {})
+    cur = valutes.get(currency.upper())
+    if not cur:
+        raise ValueError(f"Валюта {currency} не найдена в ЦБ РФ")
+    return cur["Value"] / cur["Nominal"]    
