@@ -22,10 +22,9 @@ def _sym(currency: str) -> str:
 
 
 def _eval_amount(expr: str) -> float:
-    """Безопасно вычисляет числовое выражение, например -100*7 или 1000+1.4%"""
+    """Безопасно вычисляет числовое выражение включая скобки и проценты."""
     import re
-    expr = expr.replace(",", ".").replace("'", "")
-    # Обрабатываем проценты: +1.4% → *(1+1.4/100)
+    expr = expr.replace(",", ".").replace("'", "").replace(" ", "")
     def replace_percent(m):
         sign = m.group(1)
         num = m.group(2)
@@ -35,6 +34,7 @@ def _eval_amount(expr: str) -> float:
             return f'*(1-{num}/100)'
     expr = re.sub(r'([+-])(\d+(?:\.\d+)?)%', replace_percent, expr)
     ev = SimpleEval()
+    ev.functions = {"abs": abs, "round": round}
     return float(ev.eval(expr))
 
 
