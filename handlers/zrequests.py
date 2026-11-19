@@ -235,6 +235,9 @@ async def cmd_zremind(message: Message):
 async def _broadcast(bot: Bot):
     for chat_id, title in await zdb.get_chats():
         try:
+            rows = await zdb.list_requests(chat_id, "open")
+            if not rows:
+                continue  # нет незакрытых заявок: ничего не отправляем
             for text in await _reminder_texts(chat_id):
                 await bot.send_message(chat_id, text, parse_mode="HTML",
                                        link_preview_options=NO_PREVIEW)
