@@ -9,7 +9,8 @@ from aiogram.types import Message, BotCommand
 
 from config import BOT_TOKEN
 from database.db import init_db
-from handlers import calculator, balance, tracking, deals, formulas, tickets, transactions
+from handlers import calculator, balance, tracking, deals, formulas, tickets, transactions, zrequests
+from database import zdb
 
 logging.basicConfig(
     level=logging.INFO,
@@ -36,6 +37,10 @@ async def set_commands(bot: Bot):
         BotCommand(command="roll", description="Случайное число: /roll 100"),
         BotCommand(command="ticket", description="Создать заявку: /ticket @от @кому 1000 RUB"),
         BotCommand(command="ticketlist", description="Список открытых заявок"),
+        BotCommand(command="z",         description="Новая заявка: /z usd 100000 клиент"),
+        BotCommand(command="zlist",     description="Неисполненные заявки"),
+        BotCommand(command="zlistcomp", description="Исполненные заявки"),
+        BotCommand(command="zall",      description="Общий реестр по всем группам (админ)"),
     ]
     await bot.set_my_commands(commands)
 
@@ -47,6 +52,7 @@ async def main():
 
     # Инициализация БД
     await init_db()
+    await zdb.init_z_db()
     logger.info("База данных инициализирована")
 
     bot = Bot(
@@ -63,6 +69,7 @@ async def main():
     dp.include_router(formulas.router)
     dp.include_router(tickets.router)
     dp.include_router(transactions.router)
+    dp.include_router(zrequests.router)
 
     # /start
     @dp.message(CommandStart())
@@ -92,7 +99,8 @@ async def main():
     # Запускаем фоновый мониторинг BTC-адресов
     asyncio.create_task(tracking.monitor_addresses(bot))
     logger.info("Фоновый мониторинг BTC запущен")
-
+    
+    asyncio.create_task(zrequests.reminders_loop(bot))
     logger.info("Бот запущен. Нажми Ctrl+C для остановки.")
     await dp.start_polling(bot, allowed_updates=dp.resolve_used_update_types())
 
