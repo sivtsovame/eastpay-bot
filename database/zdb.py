@@ -125,3 +125,31 @@ async def list_all(status: str, limit: int | None = None) -> list[dict]:
         conn.row_factory = aiosqlite.Row
         async with conn.execute(sql, (status,)) as cur:
             return [dict(r) for r in await cur.fetchall()]
+
+async def _ensure_settings(conn):
+    await conn.execute(
+        "CREATE TABLE IF NOT EXISTS z_settings (key TEXT PRIMARY KEY, value TEXT)"
+    )
+
+
+async def set_hub(chat_id: int | None):
+    async with aiosqlite.connect(DB_PATH) as conn:
+        await _ensure_settings(conn)
+        if chat_id is None:
+            await conn.execute("DELETE FROM z_settings WHERE key='hub_chat'")
+        else:
+            await conn.execute("""
+                INSERT INTO z_settings (key, value) VALUES ('hub_chat', ?)
+                ON CONFLICT(key) DO UPDATE SET value=excluded.value
+            """, (str(chat_id),))
+        await conn.commit()
+
+
+async def get_hub() -> int | None:
+    async with aiosqlite.connect(DB_PATH) as conn:
+        await _ensure_settings(conn)
+        async with conn.execute(
+            "SELECT value FROM z_settings WHERE key='hub_chat'"
+        ) as cur:
+            row = await cur.fetchone()
+            return int(row[0]) if row else None        

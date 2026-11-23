@@ -41,6 +41,7 @@ async def set_commands(bot: Bot):
         BotCommand(command="zlist",     description="Неисполненные заявки"),
         BotCommand(command="zlistcomp", description="Исполненные заявки"),
         BotCommand(command="zall",      description="Общий реестр по всем группам (админ)"),
+        BotCommand(command="zhub", description="Назначить сводный чат ALL PAYMENTS (админ)"),
     ]
     await bot.set_my_commands(commands)
 

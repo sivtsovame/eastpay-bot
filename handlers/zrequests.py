@@ -167,24 +167,90 @@ async def z_cancel(cb: CallbackQuery):
 
 
 # ── /zlist и /zlistcomp ──────────────────────────────────────────────────────
+# ── Хаб ALL PAYMENTS: сводка по всем группам ─────────────────────────────────
+
+def totals_lines(rows: list[dict]) -> list[str]:
+    sums: dict[str, float] = {}
+    for r in rows:
+        sums[r["currency"]] = sums.get(r["currency"], 0) + r["amount"]
+    lines = ["", "<b>Итого:</b>"]
+    for cur in sorted(sums):
+        lines.append(f"Общее количество {cur}: {fmt_amount(sums[cur])}")
+    return lines
+
+
+async def hub_chunks(status: str, limit: int | None = None) -> list[str]:
+    rows = await zdb.list_all(status, limit)
+    if status == "open":
+        head = f"📋 <b>ALL PAYMENTS — неисполненные заявки: {len(rows)}</b>"
+        empty = "Нет активных заявок ✅"
+    else:
+        head = f"✅ <b>ALL PAYMENTS — исполненные (последние {len(rows)})</b>"
+        empty = "Исполненных заявок пока нет."
+
+    groups: dict[str, list[dict]] = {}
+    for r in rows:
+        groups.setdefault(r["chat_title"], []).append(r)
+
+    lines = []
+    for title, items in groups.items():
+        lines.append(f"\n📁 <b>{html.escape(title)}</b> — {len(items)}")
+        lines.extend(fmt_line(r) for r in items)
+    if rows and status == "open":
+        lines.extend(totals_lines(rows))
+    return build_chunks(head, lines, empty)
+
+
+async def _is_hub(chat_id: int) -> bool:
+    return (await zdb.get_hub()) == chat_id
+
+
+@router.message(Command("zhub"))
+async def cmd_zhub(message: Message):
+    """/zhub — назначить этот чат сводным (ALL PAYMENTS). /zhub off — снять."""
+    if message.from_user.id not in ADMIN_IDS:
+        await message.reply("⛔ Только для администраторов бота.")
+        return
+    if "off" in (message.text or "").lower():
+        await zdb.set_hub(None)
+        await message.reply("Сводный чат отключён.")
+        return
+    await zdb.touch_chat(message.chat.id, message.chat.title or "Личный чат")
+    await zdb.set_hub(message.chat.id)
+    await message.reply(
+        "✅ Этот чат теперь сводный (ALL PAYMENTS).\n"
+        "Здесь <code>/zlist</code> показывает заявки всех групп с итогами, "
+        "и сюда приходит общая рассылка в 10:00 и 19:00.",
+        parse_mode="HTML",
+    )
+
+
+# ── /zlist и /zlistcomp ──────────────────────────────────────────────────────
 
 @router.message(Command("zlist"))
 async def cmd_zlist(message: Message):
     await zdb.touch_chat(message.chat.id, message.chat.title or "Личный чат")
-    rows = await zdb.list_requests(message.chat.id, "open")
-    title = f"📋 <b>Неисполненные заявки: {len(rows)}</b>"
-    for chunk in build_chunks(title, [fmt_line(r) for r in rows], "Нет активных заявок ✅"):
+    if await _is_hub(message.chat.id):
+        chunks = await hub_chunks("open")
+    else:
+        rows = await zdb.list_requests(message.chat.id, "open")
+        title = f"📋 <b>Неисполненные заявки: {len(rows)}</b>"
+        chunks = build_chunks(title, [fmt_line(r) for r in rows], "Нет активных заявок ✅")
+    for chunk in chunks:
         await message.reply(chunk, parse_mode="HTML", link_preview_options=NO_PREVIEW)
 
 
 @router.message(Command("zlistcomp"))
 async def cmd_zlistcomp(message: Message):
     await zdb.touch_chat(message.chat.id, message.chat.title or "Личный чат")
-    rows = await zdb.list_requests(message.chat.id, "done", limit=50)
-    title = f"✅ <b>Исполненные заявки (последние {len(rows)})</b>"
-    for chunk in build_chunks(title, [fmt_line(r) for r in rows], "Исполненных заявок пока нет."):
+    if await _is_hub(message.chat.id):
+        chunks = await hub_chunks("done", limit=100)
+    else:
+        rows = await zdb.list_requests(message.chat.id, "done", limit=50)
+        title = f"✅ <b>Исполненные заявки (последние {len(rows)})</b>"
+        chunks = build_chunks(title, [fmt_line(r) for r in rows], "Исполненных заявок пока нет.")
+    for chunk in chunks:
         await message.reply(chunk, parse_mode="HTML", link_preview_options=NO_PREVIEW)
-
 
 # ── /zall — общий реестр по всем группам (только админы бота) ────────────────
 
@@ -228,9 +294,41 @@ async def cmd_zremind(message: Message):
     """Тест: показать напоминание в этом чате прямо сейчас (только админы бота)."""
     if message.from_user.id not in ADMIN_IDS:
         return
-    for text in await _reminder_texts(message.chat.id):
+    if await _is_hub(message.chat.id):
+        texts = await hub_chunks("open")
+    else:
+        texts = await _reminder_texts(message.chat.id)
+    for text in texts:
         await message.answer(text, parse_mode="HTML", link_preview_options=NO_PREVIEW)
 
+
+async def _broadcast(bot: Bot):
+    hub = await zdb.get_hub()
+
+    # 1) Группы: каждая получает только свои незакрытые заявки
+    for chat_id, title in await zdb.get_chats():
+        if chat_id == hub:
+            continue
+        try:
+            rows = await zdb.list_requests(chat_id, "open")
+            if not rows:
+                continue
+            for text in await _reminder_texts(chat_id):
+                await bot.send_message(chat_id, text, parse_mode="HTML",
+                                       link_preview_options=NO_PREVIEW)
+        except Exception as e:
+            logger.warning(f"Не удалось отправить напоминание в {chat_id} ({title}): {e}")
+        await asyncio.sleep(0.2)
+
+    # 2) ALL PAYMENTS: все заявки всех групп и итоги
+    if hub:
+        try:
+            if await zdb.list_all("open"):
+                for text in await hub_chunks("open"):
+                    await bot.send_message(hub, text, parse_mode="HTML",
+                                           link_preview_options=NO_PREVIEW)
+        except Exception as e:
+            logger.warning(f"Не удалось отправить сводку в хаб {hub}: {e}")
 
 async def _broadcast(bot: Bot):
     for chat_id, title in await zdb.get_chats():
@@ -260,3 +358,5 @@ async def reminders_loop(bot: Bot):
         except Exception as e:
             logger.error(f"Ошибка в reminders_loop: {e}")
         await asyncio.sleep(20)
+
+        
