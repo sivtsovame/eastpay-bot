@@ -98,7 +98,7 @@ async def cmd_z(message: Message):
     if amount <= 0:
         await message.reply("⚠️ Сумма должна быть больше нуля.")
         return
-    client = parts[3].strip()
+    client = parts[3].strip().splitlines()[0][:100]
 
     num = await zdb.next_num(message.chat.id)
     now = datetime.now(VLAT)
